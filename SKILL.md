@@ -22,7 +22,7 @@ Run setup when the user invokes the skill for a repo that does not already have 
 2. Identify the repo root. If there is one obvious repository directory next to the findings file, use it; otherwise ask for the repo path.
 3. Identify the protocol/project name from the repo, findings file, package metadata, README, or user prompt.
 4. Search repo docs, deployment files, NatSpec/comments, and code for deployment evidence.
-5. Search the internet for official or high-confidence deployment sources: bug bounty/program page, official docs, official GitHub/deployment configs, verified block explorer pages, governance/forum deployment posts, and public app/config pages. Prefer official sources; use third-party pages only as leads to official addresses.
+5. Search the internet for official or high-confidence deployment and known-issue sources: bug bounty/program page, official docs, previous audit reports, audit contest findings, official GitHub/deployment configs, verified block explorer pages, governance/forum deployment posts, and public app/config pages. Prefer official sources; use third-party pages only as leads to official addresses or prior reports.
 6. Pass discovered official docs and deployment URLs to the setup script as `--external-doc` inputs. If the runtime has no browser/search tool, ask the user for official docs, program scope, and deployment URLs before setup.
 7. Run the setup script from this skill directory:
 
@@ -57,7 +57,7 @@ python3 /path/to/bb-triage-helper/scripts/lookup_finding.py M-24 \
   --context /path/to/bb-triage-helper-output/triage-context.json
 ```
 
-3. Use the lookup packet as a starting point, not as the final answer. Open relevant finding text, docs, NatSpec/comments, prior audit notes, known-issue files, `deployment-context.md`, and code references directly when needed.
+3. Use the lookup packet as a starting point, not as the final answer. Open relevant finding text, docs, NatSpec/comments, previous audit reports, audit contest findings, prior audit notes, known-issue files, `deployment-context.md`, and code references directly when needed.
 4. For current on-chain checks, use official deployment sources, block explorers, read-only RPC calls, public dashboards, and program scope pages when available. Current state is time-sensitive; verify live facts rather than relying only on setup-time notes.
 5. If the finding belongs to a duplicate or related group, make that the first section of the response and consider whether the same root cause affects the decision.
 6. Analyze neutrally. Try to prove the finding valid and try to disprove it before deciding.
@@ -68,7 +68,7 @@ Structure each triage response with these sections, in this order:
 
 - Duplicate status: first line/section. State `Duplicate`, `Near-duplicate`, `Related`, or `No duplicate detected`. Name the matching finding IDs and the root-cause relationship. If setup did not auto-cluster something but code/finding review shows a match, say that explicitly.
 - Finding explanation: explain the issue in simple terms for a smart reader who may not know this protocol yet. Define the moving parts, explain what normally should happen, what goes wrong, and why it matters.
-- Docs/spec/known-issue check: state whether external docs, repo docs, NatSpec, comments, prior audit reports, bug bounty scope, known-issue notes, uncovered-attack-vector docs, GitHub issues/PRs, or public program pages mention this finding, a similar finding, the intended behavior, or a related invariant. Say clearly when docs are silent, ambiguous, partially mention the issue, identify a broader related issue, or mark the behavior out of scope.
+- Docs/spec/known-issue check: state whether external docs, repo docs, NatSpec, comments, previous audit reports, audit contest findings, bug bounty scope, known-issue notes, uncovered-attack-vector docs, GitHub issues/PRs, or public program pages mention this finding, a similar finding, the intended behavior, or a related invariant. Previous audits and audit contests are mandatory known-issue sources, not optional GitHub-adjacent checks. Say clearly when docs are silent, ambiguous, partially mention the issue, identify a broader related issue, or mark the behavior out of scope.
 - Current on-chain state assessment: separate detailed section. Check the current deployed state and answer:
   - Which chain(s) and contract address(es) are relevant, and how were they verified?
   - What amount is currently at risk? If the attack targets future amounts, what is a reasonable value-at-risk estimate and basis?
@@ -77,7 +77,7 @@ Structure each triage response with these sections, in this order:
   - If the attack requires a configuration, is the contract currently configured so the attack is possible on-chain, or is it a dormant bug?
   - Have the attack preconditions occurred previously on-chain?
   - Is there a reasonable chance the described behavior is intentional?
-  - Is there a reasonable chance the bug is already known from the GitHub repo, program page, docs, issues, audits, or public discussions?
+  - Is there a reasonable chance the bug is already known from previous audits, audit contest findings, the bug bounty/program page, docs, GitHub repo/issues/PRs, governance posts, or public discussions?
   - If the answers do not support a real, exploitable bug against current state, recommend skipping submission or mark the finding invalid/needs more information.
 - Numerical example: start with a short context paragraph that explains what the example is demonstrating, what the protocol/module is supposed to measure, and what goes wrong. Then use a human-readable walkthrough with concrete roles such as `user`, `depositor`, `withdrawer`, `attacker`, or `keeper`. Put important arithmetic on its own lines.
 - Protocol analysis and verdict: combine the code trace and decision in one final section. Trace entrypoints, state changes, invariants, guards, rounding, permissions, edge cases, tests, and counterpoints. Include caveats before the final decision, especially current deployment constraints, bounded value at risk, dormant configurations, admin assumptions, mitigations already present, non-applicable chains/contracts, severity limits, or ways the report overstates the issue. End with `Preliminary decision: Valid/Invalid/Partially valid/Needs more information`, confidence, assumptions, and severity/duplicate/submission notes.

@@ -15,7 +15,7 @@ Use this reference when making a single-finding validity call.
 2. Map the path: external entrypoint, internal calls, modifiers/guards, state reads/writes, emitted accounting, and downstream effects.
 3. Verify deployment context: live chain(s), contract address(es), bug bounty scope, current configuration, balances/TVL, paused state, role holders, enabled markets/assets, caps, oracle settings, and relevant historical transactions.
 4. Check preconditions: roles, initialization, paused states, caps, whitelists, oracle freshness, timing windows, decimals, rounding, token behavior, and whether those preconditions exist today.
-5. Compare specification sources and prior-report sources: external docs first if provided, then bug bounty/program pages, repo docs, GitHub issues/PRs, prior audit notes, known-issue files, uncovered-attack-vector docs, NatSpec, comments, and inferred intent.
+5. Compare specification sources and prior-report sources: external docs first if provided, then previous audit reports, audit contest findings, bug bounty/program pages, repo docs, GitHub issues/PRs, prior audit notes, known-issue files, uncovered-attack-vector docs, NatSpec, comments, and inferred intent.
 6. Build a numerical example: first explain the scenario and what the protocol is supposed to measure, then choose small numbers, use simple roles or names only where helpful, show before/after state, and make the loss/gain/invariant break visible in a natural walkthrough with arithmetic on separate lines.
 7. Try to invalidate: search for current-state blockers, guards, clamps, reverts, invariant restoration, impossible caller paths, dormant configs, admin-only misconfiguration assumptions, or missing permissions.
 8. Try to validate: search for alternate entrypoints, live enabled configurations, stale state, rounding accumulation, integration flows, hooks, callbacks, cross-contract effects, and previous on-chain precondition occurrences.
@@ -99,13 +99,13 @@ Avoid examples that depend on arbitrary huge numbers unless the exploit actually
 
 ## Documentation Check
 
-Docs Check must look for both specification intent and prior identification of the same or similar issue. Search external docs, repo docs, prior audit reports, issue lists, `ALL_FINDINGS`-style files, `UNCOVERED_ATTACK_VECTORS`-style files, TODO/security notes, NatSpec, and comments.
+Docs Check must look for both specification intent and prior identification of the same or similar issue. Search external docs, repo docs, previous audit reports, audit contest findings, prior audit notes, issue lists, `ALL_FINDINGS`-style files, `UNCOVERED_ATTACK_VECTORS`-style files, TODO/security notes, NatSpec, and comments.
 
 When docs mention the behavior or issue, classify the relationship:
 
 - Direct support: docs explicitly require or forbid the behavior in the finding.
 - Related invariant: docs describe a broader invariant that the finding may affect.
-- Prior/similar finding: docs or audit notes already identify the same bug, a duplicate, a broader issue, or a neighboring edge case.
+- Prior/similar finding: previous audits, audit contest findings, docs, or audit notes already identify the same bug, a duplicate, a broader issue, or a neighboring edge case.
 - Conflicting behavior: docs contradict the implementation or report assumption.
 - Operational caveat: docs weaken or qualify the practical exploit path, such as no public mempool, restricted keepers, limited token set, or configuration constraints.
 - Silent: docs do not address the behavior.
@@ -127,7 +127,7 @@ Answer these points in a separate section:
 - Current configuration: whether the live contract is configured so the attack can happen now, or whether the bug is dormant behind disabled assets, zero caps, paused state, unset routes, missing approvals, stale deployments, or uninitialized modules.
 - Historical preconditions: whether needed states or events have appeared before, such as queued withdrawals, stale oracle updates, liquidation windows, empty markets, role actions, or matching transaction patterns.
 - Intent: whether docs, naming, tests, or product behavior suggest the described behavior is intentional.
-- Known issue status: whether the repo, docs, program page, audits, issues, PRs, governance posts, or public discussions already mention the issue or a close variant.
+- Known issue status: whether previous audit reports, audit contest findings, the repo, docs, program page, issues, PRs, governance posts, or public discussions already mention the issue or a close variant.
 - Submission recommendation: if current-state answers do not support a real exploitable bug, recommend skipping submission or classify as invalid/needs more information.
 
 ## Protocol Analysis And Verdict

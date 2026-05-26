@@ -27,7 +27,7 @@ Add one `--external-doc <path-or-url>` argument for each external official docum
 python3 {{BB_TRIAGE_HELPER_DIR}}/scripts/lookup_finding.py <finding-id> --context <triage-context.json>
 ```
 
-Use the lookup packet only as starting context. Open the relevant finding text, docs, prior audit/known-issue notes, NatSpec/comments, deployment context, and code paths directly.
+Use the lookup packet only as starting context. Open the relevant finding text, docs, previous audit reports, audit contest findings, prior audit/known-issue notes, NatSpec/comments, deployment context, and code paths directly.
 
 Final answers for single-finding triage must use this section order:
 
@@ -40,9 +40,9 @@ Final answers for single-finding triage must use this section order:
 
 The first section must state `Duplicate`, `Near-duplicate`, `Related`, or `No duplicate detected`.
 
-Docs/spec/known-issue check must look for both intended behavior and prior identification of the same or similar issue in external docs, repo docs, bug bounty/program pages, prior audit reports, known-issue files, GitHub issues/PRs, uncovered-attack-vector docs, NatSpec, and comments.
+Docs/spec/known-issue check must look for both intended behavior and prior identification of the same or similar issue in external docs, repo docs, bug bounty/program pages, previous audit reports, audit contest findings, known-issue files, GitHub issues/PRs, uncovered-attack-vector docs, NatSpec, and comments. Previous audits and audit contests are mandatory known-issue sources, not optional GitHub-only checks.
 
-Current on-chain state assessment must verify live chain(s), contract address(es), configuration, balances/value at risk, repeatability, admin/config assumptions, historical preconditions, possible intentional behavior, and whether the bug is already known. If current state does not support a real exploitable bug, recommend skipping submission or classify as invalid/needs more information.
+Current on-chain state assessment must verify live chain(s), contract address(es), configuration, balances/value at risk, repeatability, admin/config assumptions, historical preconditions, possible intentional behavior, and whether the bug is already known from previous audits, audit contest findings, program pages, docs, GitHub, or public discussions. If current state does not support a real exploitable bug, recommend skipping submission or classify as invalid/needs more information.
 
 Finding explanations should be simple and educational, not brief auditor shorthand. Explain the moving parts, normal behavior, what goes wrong, and why it matters.
 

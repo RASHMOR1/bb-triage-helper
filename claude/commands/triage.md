@@ -24,7 +24,7 @@ Instructions:
 python3 {{BB_TRIAGE_HELPER_DIR}}/scripts/lookup_finding.py <finding-id> --context <triage-context.json>
 ```
 
-5. Use the lookup packet only as a starting point. Directly inspect the relevant finding text, docs, prior audit/known-issue notes, NatSpec/comments, deployment context, and implementation.
+5. Use the lookup packet only as a starting point. Directly inspect the relevant finding text, docs, previous audit reports, audit contest findings, prior audit/known-issue notes, NatSpec/comments, deployment context, and implementation.
 6. Verify current on-chain state from `deployment-context.md`, official docs/program pages, block explorers, read-only calls, dashboards, and historical transactions when available.
 7. Give the final triage response in exactly this order:
 
@@ -38,7 +38,7 @@ Explain the issue in simple terms for a smart reader who may not know this proto
 
 ## Docs/Spec/Known-Issue Check
 
-Check external docs, repo docs, prior audit reports, bug bounty scope, known-issue files, GitHub issues/PRs, uncovered-attack-vector docs, NatSpec, and comments for the same issue, similar issues, intended behavior, related invariants, and scope caveats. Say clearly whether docs are silent, ambiguous, partially mention it, identify a broader related issue, or mark it out of scope.
+Check external docs, repo docs, previous audit reports, audit contest findings, bug bounty scope, known-issue files, GitHub issues/PRs, uncovered-attack-vector docs, NatSpec, and comments for the same issue, similar issues, intended behavior, related invariants, and scope caveats. Previous audits and audit contests are mandatory known-issue sources, not optional GitHub-only checks. Say clearly whether docs are silent, ambiguous, partially mention it, identify a broader related issue, or mark it out of scope.
 
 ## Current On-chain State Assessment
 
@@ -51,7 +51,7 @@ Check current deployed state and answer:
 - If the attack requires a configuration, is the contract currently configured so the attack is possible on-chain, or is it dormant?
 - Have the preconditions for the attack occurred previously?
 - Is there a chance the described behavior is intentional?
-- Is there a chance the bug is known from the GitHub repo, program page, docs, issues, audits, or public discussions?
+- Is there a chance the bug is known from previous audits, audit contest findings, the program page, docs, GitHub repo/issues/PRs, governance posts, or public discussions?
 - If current-state answers do not support a real, exploitable bug, recommend skipping submission or classify as invalid/needs more information.
 
 ## Numerical Example
