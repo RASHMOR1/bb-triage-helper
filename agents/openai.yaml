@@ -1,4 +1,4 @@
 interface:
-  display_name: "Triage Helper"
-  short_description: "Set up and triage audit findings"
-  default_prompt: "Use $triage-helper to set up triage for this repo and help assess finding M-24."
+  display_name: "BB Triage Helper"
+  short_description: "Triage bug-bounty findings against live deployments"
+  default_prompt: "Use $bb-triage-helper to set up bug bounty triage for this repo and help assess finding M-24."

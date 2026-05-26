@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Print a focused triage packet for one finding ID."""
+"""Print a focused bug-bounty triage packet for one finding ID."""
 
 from __future__ import annotations
 
@@ -31,6 +31,7 @@ SOURCE_EXTS = {
     ".hpp",
     ".move",
 }
+HELPER_NAME = "bb-triage-helper"
 IGNORED_DIRS = {
     ".git",
     ".hg",
@@ -121,7 +122,7 @@ def safe_read_text(path: Path, max_bytes: int = 1_000_000) -> str:
 
 
 def fetch_url(url: str, timeout: int = 20) -> str:
-    request = urllib.request.Request(url, headers={"User-Agent": "triage-helper/1.0"})
+    request = urllib.request.Request(url, headers={"User-Agent": f"{HELPER_NAME}/1.1"})
     with urllib.request.urlopen(request, timeout=timeout) as response:
         content_type = response.headers.get("content-type", "")
         encoding = "utf-8"
@@ -317,6 +318,41 @@ def find_related(context: dict, finding: dict) -> list[str]:
     return sorted(related)
 
 
+def print_deployment_context(context: dict) -> None:
+    deployment = context.get("deployment", {})
+    deployment_path = Path(context.get("output_dir", ".")) / "deployment-context.md"
+
+    print("## Deployment / On-chain Context")
+    print()
+    print(f"- Deployment artifact: `{deployment_path}`")
+    if context.get("protocol_name"):
+        print(f"- Protocol name: `{context['protocol_name']}`")
+
+    chains = deployment.get("chains", [])
+    if chains:
+        print("- Candidate chains from setup:")
+        for item in chains[:8]:
+            print(f"  - {item['chain']} ({item.get('evidence_count', 0)} evidence hits)")
+    else:
+        print("- No candidate chain was discovered during setup.")
+
+    addresses = deployment.get("addresses", [])
+    if addresses:
+        print("- Candidate contract/program addresses from setup:")
+        for item in addresses[:12]:
+            nearby = ", ".join(item.get("nearby_chains", [])) or "unknown chain context"
+            labels = ", ".join(item.get("labels", [])[:2])
+            label_suffix = f" - {labels}" if labels else ""
+            print(f"  - `{item['address']}` ({item['type']}, {nearby}){label_suffix}")
+    else:
+        print("- No candidate contract or program address was discovered during setup.")
+
+    notes = deployment.get("notes", [])
+    for note in notes[:4]:
+        print(f"- Note: {note}")
+    print()
+
+
 def resolve_finding(context: dict, finding_id: str) -> dict:
     wanted = canonical_id(finding_id)
     for finding in context.get("findings", []):
@@ -379,6 +415,8 @@ def print_markdown(context: dict, finding: dict, max_content_chars: int) -> None
             print(f"  - {hit['excerpt']}")
     print()
 
+    print_deployment_context(context)
+
     print("## Candidate Code References")
     print()
     refs = code_hits(context, finding)
@@ -396,17 +434,20 @@ def print_markdown(context: dict, finding: dict, max_content_chars: int) -> None
     print("- Start the final response with duplicate status: Duplicate, Near-duplicate, Related, or No duplicate detected.")
     print("- Explain the claim in simple, educational terms for someone new to this protocol.")
     print("- Check docs/spec/NatSpec/comments plus prior audit or known-issue docs for the same or similar issue.")
+    print("- Add a separate Current On-chain State Assessment section before the numerical example.")
+    print("- In that section, verify current deployed state, value at risk, repeatability, configuration/admin assumptions, historical preconditions, intentional behavior, and whether the bug is already known.")
+    print("- If current state does not support a real exploitable issue, recommend skipping submission or marking the finding invalid/needs more information.")
     print("- Build a numerical example with context first: what should happen, what the code does, and why the numbers matter.")
     print("- Trace the implementation and try both to validate and invalidate the report.")
     print("- Combine protocol analysis and verdict in one final section, including caveats when relevant.")
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Look up one finding from triage-context.json.")
+    parser = argparse.ArgumentParser(description="Look up one bug-bounty finding from triage-context.json.")
     parser.add_argument("finding_id", help="Finding ID, for example M-24.")
     parser.add_argument(
         "--context",
-        default="triage-helper-output/triage-context.json",
+        default="bb-triage-helper-output/triage-context.json",
         help="Path to triage-context.json.",
     )
     parser.add_argument("--max-content-chars", type=int, default=14_000)
@@ -428,6 +469,7 @@ def main(argv: list[str] | None = None) -> int:
             "related": find_related(context, finding),
             "doc_hits": doc_hits(context, finding),
             "code_hits": code_hits(context, finding),
+            "deployment": context.get("deployment", {}),
         }
         print(json.dumps(payload, indent=2))
     else:

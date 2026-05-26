@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install Claude Code commands and subagent for triage-helper."""
+"""Install Claude Code commands and subagent for bb-triage-helper."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 
-PLACEHOLDER = "{{TRIAGE_HELPER_DIR}}"
+PLACEHOLDER = "{{BB_TRIAGE_HELPER_DIR}}"
 
 
 def render_template(source: Path, skill_dir: Path) -> str:
@@ -41,7 +41,7 @@ def install(scope_root: Path, skill_dir: Path, force: bool) -> list[str]:
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Install triage-helper support for Claude Code.")
+    parser = argparse.ArgumentParser(description="Install bb-triage-helper support for Claude Code.")
     parser.add_argument(
         "--scope",
         choices=("project", "user"),
@@ -56,7 +56,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--skill-dir",
         default=str(Path(__file__).resolve().parents[1]),
-        help="Path to this triage-helper directory.",
+        help="Path to this bb-triage-helper directory.",
     )
     parser.add_argument("--force", action="store_true", help="Overwrite existing Claude Code files.")
     return parser.parse_args(argv)
@@ -66,14 +66,14 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv or sys.argv[1:])
     skill_dir = Path(args.skill_dir).expanduser().resolve()
     if not (skill_dir / "SKILL.md").is_file():
-        raise SystemExit(f"Invalid triage-helper directory: {skill_dir}")
+        raise SystemExit(f"Invalid bb-triage-helper directory: {skill_dir}")
 
     if args.scope == "project":
         scope_root = Path(args.project_dir).expanduser().resolve() / ".claude"
     else:
         scope_root = Path.home() / ".claude"
 
-    print(f"Installing Claude Code support for triage-helper")
+    print("Installing Claude Code support for bb-triage-helper")
     print(f"Skill directory: {skill_dir}")
     print(f"Target scope: {scope_root}")
 
@@ -84,7 +84,7 @@ def main(argv: list[str] | None = None) -> int:
     print("Available in Claude Code after install:")
     print("- /triage-setup")
     print("- /triage <finding-id>")
-    print("- triage-helper subagent")
+    print("- bb-triage-helper subagent")
     return 0
 
 

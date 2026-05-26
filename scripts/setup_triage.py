@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build setup artifacts for audit finding triage."""
+"""Build setup artifacts for bug-bounty finding triage."""
 
 from __future__ import annotations
 
@@ -16,7 +16,8 @@ from pathlib import Path
 from typing import Iterable
 
 
-VERSION = "1.0"
+VERSION = "1.1"
+HELPER_NAME = "bb-triage-helper"
 
 FINDING_ID_RE = re.compile(
     r"(?<![A-Za-z0-9])((?:H|M|L|I|G|NC|QA|R|C|S|A)-?\d{1,4})(?![A-Za-z0-9])",
@@ -45,6 +46,56 @@ SOURCE_EXTS = {
     ".hpp",
     ".move",
 }
+DEPLOYMENT_EXTS = DOC_EXTS | SOURCE_EXTS | {
+    ".cfg",
+    ".conf",
+    ".csv",
+    ".env",
+    ".ini",
+    ".json",
+    ".jsonc",
+    ".toml",
+    ".yaml",
+    ".yml",
+}
+DEPLOYMENT_NAME_RE = re.compile(
+    r"(address|addresses|blockscout|chain|chains|contract|contracts|deploy|deployment|"
+    r"etherscan|explorer|foundry|hardhat|mainnet|network|program|proxy|scope|viem|wagmi)",
+    re.IGNORECASE,
+)
+EVM_ADDRESS_RE = re.compile(r"\b0x[a-fA-F0-9]{40}\b")
+SOLANA_PROGRAM_RE = re.compile(
+    r"\b(?:program(?:\s+id)?|programId|program_id|address)\s*[:=]\s*[`'\"]?"
+    r"([1-9A-HJ-NP-Za-km-z]{32,44})",
+    re.IGNORECASE,
+)
+URL_RE = re.compile(r"https?://[^\s<>)\]\"']+")
+IGNORED_EVM_ADDRESSES = {
+    "0x0000000000000000000000000000000000000000",
+    "0x000000000000000000000000000000000000dead",
+    "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+}
+CHAIN_PATTERNS: list[tuple[str, list[str]]] = [
+    ("Ethereum mainnet", [r"\bethereum\s+mainnet\b", r"\bethereum\b", r"\bchain\s*id\s*[:=]?\s*1\b", r"\betherscan\.io\b"]),
+    ("Arbitrum One", [r"\barbitrum(?:\s+one)?\b", r"\bchain\s*id\s*[:=]?\s*42161\b", r"\barbiscan\.io\b"]),
+    ("Optimism", [r"\boptimism\b", r"\bop\s+mainnet\b", r"\bchain\s*id\s*[:=]?\s*10\b", r"\boptimistic\.etherscan\.io\b"]),
+    ("Base", [r"\bbase\s+(?:mainnet|chain|network)\b", r"\bchain\s*id\s*[:=]?\s*8453\b", r"\bbasescan\.org\b"]),
+    ("Polygon", [r"\bpolygon\b", r"\bmatic\b", r"\bchain\s*id\s*[:=]?\s*137\b", r"\bpolygonscan\.com\b"]),
+    ("Avalanche C-Chain", [r"\bavalanche\b", r"\bc-chain\b", r"\bchain\s*id\s*[:=]?\s*43114\b", r"\bsnowtrace\.io\b"]),
+    ("BNB Chain", [r"\bbnb\s+chain\b", r"\bbsc\b", r"\bchain\s*id\s*[:=]?\s*56\b", r"\bbscscan\.com\b"]),
+    ("Gnosis Chain", [r"\bgnosis\s+chain\b", r"\bxdai\b", r"\bchain\s*id\s*[:=]?\s*100\b", r"\bgnosisscan\.io\b"]),
+    ("Fantom", [r"\bfantom\b", r"\bchain\s*id\s*[:=]?\s*250\b", r"\bftmscan\.com\b"]),
+    ("Celo", [r"\bcelo\b", r"\bchain\s*id\s*[:=]?\s*42220\b", r"\bceloscan\.io\b"]),
+    ("zkSync Era", [r"\bzksync(?:\s+era)?\b", r"\bchain\s*id\s*[:=]?\s*324\b", r"\bexplorer\.zksync\.io\b"]),
+    ("Scroll", [r"\bscroll\b", r"\bchain\s*id\s*[:=]?\s*534352\b", r"\bscrollscan\.com\b"]),
+    ("Linea", [r"\blinea\b", r"\bchain\s*id\s*[:=]?\s*59144\b", r"\blineascan\.build\b"]),
+    ("Mantle", [r"\bmantle\b", r"\bchain\s*id\s*[:=]?\s*5000\b", r"\bmantlescan\.xyz\b"]),
+    ("Blast", [r"\bblast\b", r"\bchain\s*id\s*[:=]?\s*81457\b", r"\bblastscan\.io\b"]),
+    ("Mode", [r"\bmode\s+(?:mainnet|network|chain)\b", r"\bchain\s*id\s*[:=]?\s*34443\b", r"\bmodescan\.io\b"]),
+    ("Solana", [r"\bsolana\b", r"\bexplorer\.solana\.com\b", r"\bsolscan\.io\b"]),
+    ("Sui", [r"\bsui\b", r"\bsuiscan\.xyz\b"]),
+    ("Aptos", [r"\baptos\b", r"\baptoscan\.com\b"]),
+]
 IGNORED_DIRS = {
     ".git",
     ".hg",
@@ -144,7 +195,7 @@ def safe_read_text(path: Path, max_bytes: int = 1_000_000) -> str:
 def fetch_url(url: str, timeout: int = 20) -> str:
     request = urllib.request.Request(
         url,
-        headers={"User-Agent": "triage-helper/1.0"},
+        headers={"User-Agent": f"{HELPER_NAME}/{VERSION}"},
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:
         content_type = response.headers.get("content-type", "")
@@ -442,6 +493,265 @@ def collect_docs(repo_root: Path, external_docs: list[str], include_deps: bool) 
     return docs
 
 
+def context_around(text: str, start: int, end: int | None = None, max_chars: int = 420) -> str:
+    if end is None:
+        end = start
+    left = max(0, start - max_chars // 2)
+    right = min(len(text), end + max_chars // 2)
+    prefix = "..." if left > 0 else ""
+    suffix = "..." if right < len(text) else ""
+    return prefix + normalize_ws(text[left:right]) + suffix
+
+
+def line_containing_offset(text: str, offset: int) -> str:
+    start = text.rfind("\n", 0, offset) + 1
+    end = text.find("\n", offset)
+    if end == -1:
+        end = len(text)
+    return text[start:end].strip()
+
+
+def contract_label_from_line(line: str, address: str) -> str:
+    cleaned = line.replace(address, "").replace(address.lower(), "").replace(address.upper(), "")
+    cleaned = re.sub(r"[`'\"{},\[\]]", " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" :-=")
+    if 3 <= len(cleaned) <= 120:
+        return cleaned
+    return ""
+
+
+def chain_hits_in_text(text: str, source: str, display_path: str, max_hits_per_chain: int = 3) -> list[dict]:
+    hits: list[dict] = []
+    for chain, patterns in CHAIN_PATTERNS:
+        chain_hits = 0
+        seen_excerpts: set[str] = set()
+        for pattern in patterns:
+            for match in re.finditer(pattern, text, re.IGNORECASE):
+                chain_hits += 1
+                excerpt_value = context_around(text, match.start(), match.end())
+                if excerpt_value in seen_excerpts:
+                    continue
+                seen_excerpts.add(excerpt_value)
+                hits.append(
+                    {
+                        "chain": chain,
+                        "matched": match.group(0),
+                        "source": source,
+                        "display_path": display_path,
+                        "excerpt": excerpt_value,
+                    }
+                )
+                if chain_hits >= max_hits_per_chain:
+                    break
+            if chain_hits >= max_hits_per_chain:
+                break
+    return hits
+
+
+def chain_names_in_text(text: str) -> list[str]:
+    names = []
+    for hit in chain_hits_in_text(text, "context", "context", max_hits_per_chain=1):
+        if hit["chain"] not in names:
+            names.append(hit["chain"])
+    return names
+
+
+def deployment_urls_in_text(text: str, max_urls: int = 80) -> list[str]:
+    urls = []
+    for match in URL_RE.finditer(text):
+        url = match.group(0).rstrip(".,;")
+        lowered = url.lower()
+        if any(
+            marker in lowered
+            for marker in (
+                "address",
+                "blockscout",
+                "contract",
+                "deploy",
+                "docs",
+                "etherscan",
+                "explorer",
+                "github",
+                "scan",
+                "scope",
+            )
+        ):
+            urls.append(url)
+        if len(urls) >= max_urls:
+            break
+    return urls
+
+
+def is_deployment_candidate(path: Path, repo_root: Path) -> bool:
+    try:
+        rel = str(path.relative_to(repo_root))
+    except ValueError:
+        rel = str(path)
+    lowered = rel.lower()
+    if path.suffix.lower() in DEPLOYMENT_EXTS and DEPLOYMENT_NAME_RE.search(lowered):
+        return True
+    if path.name.startswith(".env") or path.name in {"foundry.toml", "hardhat.config.ts", "hardhat.config.js"}:
+        return True
+    return False
+
+
+def iter_deployment_sources(repo_root: Path, docs: list[dict], include_deps: bool) -> list[dict]:
+    sources: list[dict] = []
+    seen: set[str] = set()
+
+    for doc in docs:
+        path_value = doc["path"]
+        key = f"doc:{path_value}"
+        if key in seen:
+            continue
+        seen.add(key)
+        if doc.get("fetched_text"):
+            body = doc["fetched_text"]
+        elif path_value.startswith(("http://", "https://")):
+            body = doc.get("excerpt", "")
+        else:
+            path = Path(path_value)
+            if not path.is_file():
+                body = doc.get("excerpt", "")
+            else:
+                body = safe_read_text(path)
+                if doc.get("kind") == "source-comments":
+                    body = extract_comments(body, path.suffix.lower())
+        if normalize_ws(body):
+            sources.append(
+                {
+                    "source": doc.get("source", "repo"),
+                    "kind": doc.get("kind", "document"),
+                    "path": path_value,
+                    "display_path": doc.get("display_path", path_value),
+                    "text": body,
+                }
+            )
+
+    for path in iter_repo_files(repo_root, include_deps=include_deps):
+        if not is_deployment_candidate(path, repo_root):
+            continue
+        if path.stat().st_size > 1_000_000:
+            continue
+        key = f"file:{path.resolve()}"
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            body = safe_read_text(path)
+        except Exception:
+            continue
+        try:
+            display_path = str(path.relative_to(repo_root))
+        except ValueError:
+            display_path = str(path)
+        if normalize_ws(body):
+            sources.append(
+                {
+                    "source": "repo",
+                    "kind": "deployment-candidate",
+                    "path": str(path.resolve()),
+                    "display_path": display_path,
+                    "text": body,
+                }
+            )
+    return sources
+
+
+def add_address_record(records: dict, address_type: str, address: str, source: dict, start: int, end: int) -> None:
+    comparable = address.lower() if address_type == "evm" else address
+    if comparable in IGNORED_EVM_ADDRESSES:
+        return
+    key = (address_type, comparable)
+    context = context_around(source["text"], start, end)
+    record = records.setdefault(
+        key,
+        {
+            "type": address_type,
+            "address": address,
+            "nearby_chains": [],
+            "labels": [],
+            "sources": [],
+        },
+    )
+
+    for chain in chain_names_in_text(context):
+        if chain not in record["nearby_chains"]:
+            record["nearby_chains"].append(chain)
+
+    label = contract_label_from_line(line_containing_offset(source["text"], start), address)
+    if label and label not in record["labels"]:
+        record["labels"].append(label)
+
+    source_entry = {
+        "display_path": source["display_path"],
+        "source": source["source"],
+        "kind": source["kind"],
+        "excerpt": context,
+    }
+    if source_entry not in record["sources"]:
+        record["sources"].append(source_entry)
+
+
+def discover_deployment_context(repo_root: Path, docs: list[dict], external_docs: list[str], include_deps: bool) -> dict:
+    sources = iter_deployment_sources(repo_root, docs, include_deps)
+    chain_evidence: dict[str, list[dict]] = defaultdict(list)
+    address_records: dict[tuple[str, str], dict] = {}
+    candidate_urls: list[str] = []
+
+    for source in sources:
+        text = source["text"]
+        for hit in chain_hits_in_text(text, source["source"], source["display_path"]):
+            if len(chain_evidence[hit["chain"]]) < 10:
+                chain_evidence[hit["chain"]].append(hit)
+        for match in EVM_ADDRESS_RE.finditer(text):
+            add_address_record(address_records, "evm", match.group(0), source, match.start(), match.end())
+        for match in SOLANA_PROGRAM_RE.finditer(text):
+            add_address_record(address_records, "solana-program", match.group(1), source, match.start(1), match.end(1))
+        for url in deployment_urls_in_text(text):
+            if url not in candidate_urls:
+                candidate_urls.append(url)
+
+    chain_rows = []
+    for chain, evidence in chain_evidence.items():
+        chain_rows.append(
+            {
+                "chain": chain,
+                "evidence_count": len(evidence),
+                "evidence": evidence[:5],
+            }
+        )
+    chain_rows.sort(key=lambda item: (item["evidence_count"], item["chain"]), reverse=True)
+
+    addresses = list(address_records.values())
+    addresses.sort(key=lambda item: (len(item["sources"]), item["address"].lower()), reverse=True)
+    for item in addresses:
+        item["sources"] = item["sources"][:6]
+        item["labels"] = item["labels"][:6]
+        item["nearby_chains"] = item["nearby_chains"][:6]
+
+    notes = [
+        "Verify chains and addresses against official docs, bug bounty scope, and block explorers before relying on them.",
+        "Address extraction is heuristic; token, oracle, proxy, implementation, and test addresses may appear together.",
+    ]
+    if external_docs:
+        notes.append("External URLs and docs were included in deployment discovery.")
+    else:
+        notes.append("No external docs were supplied to the script; the agent should add official internet sources during setup.")
+    if not chain_rows:
+        notes.append("No chain evidence was discovered automatically.")
+    if not addresses:
+        notes.append("No contract or program addresses were discovered automatically.")
+
+    return {
+        "sources_scanned": len(sources),
+        "chains": chain_rows,
+        "addresses": addresses,
+        "candidate_urls": candidate_urls[:80],
+        "notes": notes,
+    }
+
+
 def jaccard(left: set[str], right: set[str]) -> float:
     if not left or not right:
         return 0.0
@@ -694,6 +1004,85 @@ def write_docs_index(path: Path, context: dict) -> None:
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
+def write_deployment_context(path: Path, context: dict) -> None:
+    deployment = context["deployment"]
+    lines = [
+        "# Deployment Context",
+        "",
+        f"Generated: {context['generated_at']}",
+        f"Repo root: `{context['repo_root']}`",
+        f"Findings file: `{context['findings_file']}`",
+    ]
+    if context.get("protocol_name"):
+        lines.append(f"Protocol name: `{context['protocol_name']}`")
+    lines.extend(
+        [
+            "",
+            "This file is a setup artifact for bug-bounty triage. Treat it as evidence to verify, not as final truth.",
+            "",
+            "## Discovery Notes",
+            "",
+        ]
+    )
+    for note in deployment.get("notes", []):
+        lines.append(f"- {note}")
+    lines.append(f"- Sources scanned by the script: {deployment.get('sources_scanned', 0)}")
+
+    lines.extend(["", "## Likely Chains", ""])
+    chains = deployment.get("chains", [])
+    if not chains:
+        lines.append("No chain evidence was discovered automatically.")
+    for item in chains:
+        lines.append(f"### {item['chain']}")
+        lines.append(f"Evidence count: {item['evidence_count']}")
+        lines.append("")
+        for evidence in item.get("evidence", [])[:5]:
+            lines.append(f"- `{evidence['display_path']}` ({evidence['source']}, matched `{evidence['matched']}`)")
+            if evidence.get("excerpt"):
+                lines.append(f"  - {evidence['excerpt']}")
+        lines.append("")
+
+    lines.extend(["", "## Candidate Contract Addresses", ""])
+    addresses = deployment.get("addresses", [])
+    if not addresses:
+        lines.append("No contract or program addresses were discovered automatically.")
+    for item in addresses:
+        nearby = ", ".join(item.get("nearby_chains", [])) or "unknown nearby chain"
+        labels = ", ".join(f"`{label}`" for label in item.get("labels", [])[:4])
+        lines.append(f"### `{item['address']}`")
+        lines.append(f"- Type: {item['type']}")
+        lines.append(f"- Nearby chain evidence: {nearby}")
+        if labels:
+            lines.append(f"- Labels: {labels}")
+        lines.append("- Sources:")
+        for source in item.get("sources", [])[:6]:
+            lines.append(f"  - `{source['display_path']}` ({source['source']}, {source['kind']})")
+            if source.get("excerpt"):
+                lines.append(f"    - {source['excerpt']}")
+        lines.append("")
+
+    lines.extend(["", "## Candidate Deployment URLs", ""])
+    urls = deployment.get("candidate_urls", [])
+    if not urls:
+        lines.append("No deployment-related URLs were discovered automatically.")
+    for url in urls:
+        lines.append(f"- {url}")
+
+    lines.extend(
+        [
+            "",
+            "## Manual Verification Checklist",
+            "",
+            "- Confirm the bug bounty scope and official deployment pages.",
+            "- Confirm chain IDs, proxy addresses, implementation addresses, and upgrade/admin roles.",
+            "- Confirm relevant current config through read-only contract calls or block explorers.",
+            "- Record TVL, balances, caps, paused state, whitelists, oracle configuration, and role holders needed by each finding.",
+        ]
+    )
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
 def build_context(args: argparse.Namespace) -> dict:
     repo_root = Path(args.repo).expanduser().resolve()
     findings_file = Path(args.findings).expanduser().resolve()
@@ -702,7 +1091,7 @@ def build_context(args: argparse.Namespace) -> dict:
     if not findings_file.is_file():
         raise SystemExit(f"Findings file does not exist: {findings_file}")
 
-    output_dir = Path(args.output).expanduser().resolve() if args.output else findings_file.parent / "triage-helper-output"
+    output_dir = Path(args.output).expanduser().resolve() if args.output else findings_file.parent / "bb-triage-helper-output"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     external_docs = args.external_doc or []
@@ -710,10 +1099,13 @@ def build_context(args: argparse.Namespace) -> dict:
     docs = collect_docs(repo_root, external_docs, include_deps=args.include_deps)
     add_doc_hits(findings, docs)
     groups = group_findings(findings)
+    deployment = discover_deployment_context(repo_root, docs, external_docs, include_deps=args.include_deps)
 
     return {
         "version": VERSION,
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "helper": HELPER_NAME,
+        "protocol_name": args.protocol_name or "",
         "repo_root": str(repo_root),
         "findings_file": str(findings_file),
         "external_docs": external_docs,
@@ -723,20 +1115,22 @@ def build_context(args: argparse.Namespace) -> dict:
         "findings": findings,
         "docs": docs,
         "groups": groups,
+        "deployment": deployment,
     }
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Set up triage artifacts from a repo and findings.md.")
+    parser = argparse.ArgumentParser(description="Set up bug-bounty triage artifacts from a repo and findings.md.")
     parser.add_argument("--repo", required=True, help="Path to the repository under triage.")
     parser.add_argument("--findings", required=True, help="Path to the markdown findings file.")
+    parser.add_argument("--protocol-name", help="Optional protocol/project name for deployment discovery notes.")
     parser.add_argument(
         "--external-doc",
         action="append",
         default=[],
         help="Optional external documentation path, directory, or URL. Repeat for multiple inputs.",
     )
-    parser.add_argument("--output", help="Output directory. Defaults to findings-file sibling triage-helper-output/.")
+    parser.add_argument("--output", help="Output directory. Defaults to findings-file sibling bb-triage-helper-output/.")
     parser.add_argument("--include-deps", action="store_true", help="Include dependency directories during indexing.")
     return parser.parse_args(argv)
 
@@ -749,15 +1143,22 @@ def main(argv: list[str] | None = None) -> int:
     context_path = output_dir / "triage-context.json"
     related_path = output_dir / "related-findings.md"
     docs_path = output_dir / "docs-index.md"
+    deployment_path = output_dir / "deployment-context.md"
 
     context_path.write_text(json.dumps(context, indent=2), encoding="utf-8")
     write_related_markdown(related_path, context)
     write_docs_index(docs_path, context)
+    write_deployment_context(deployment_path, context)
 
     print(f"Indexed {context['findings_count']} findings and {context['docs_count']} documentation sources.")
+    print(
+        f"Found {len(context['deployment']['chains'])} candidate chains and "
+        f"{len(context['deployment']['addresses'])} candidate addresses."
+    )
     print(f"Wrote context: {context_path}")
     print(f"Wrote related findings: {related_path}")
     print(f"Wrote docs index: {docs_path}")
+    print(f"Wrote deployment context: {deployment_path}")
     return 0
 
 
