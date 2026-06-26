@@ -86,6 +86,60 @@ python3 /your-folder/bb-triage-helper/scripts/lookup_finding.py M-24 \
 
 The lookup output is not the final triage answer. It is a focused packet the AI agent uses before reading the actual code, docs, deployment context, and finding text directly.
 
+## Automated Multi-Finding Triage
+
+For large finding sets, use the orchestrator instead of asking one long-running AI session to triage everything. It creates one prompt and one CLI process per finding, which reduces context bleed between similar reports.
+
+Dry-run one finding and inspect the generated prompt:
+
+```bash
+python3 /your-folder/bb-triage-helper/scripts/orchestrate_triage.py \
+  --context ./bb-triage-helper-output/triage-context.json \
+  --ids C-01 \
+  --dry-run
+```
+
+Run all findings with Codex, GPT-5.5, extra-high reasoning, and web search:
+
+```bash
+python3 /your-folder/bb-triage-helper/scripts/orchestrate_triage.py \
+  --context ./bb-triage-helper-output/triage-context.json \
+  --model gpt-5.5 \
+  --reasoning-effort xhigh \
+  --jobs 1
+```
+
+Run a small batch:
+
+```bash
+python3 /your-folder/bb-triage-helper/scripts/orchestrate_triage.py \
+  --context ./bb-triage-helper-output/triage-context.json \
+  --from-id C-01 \
+  --to-id C-05 \
+  --jobs 1
+```
+
+Outputs are written under:
+
+```text
+bb-triage-helper-output/triaged/
+├── prompts/
+├── results/
+├── logs/
+├── manifest.jsonl
+└── index.md
+```
+
+By default, existing result files are skipped so interrupted runs can be resumed. Use `--force` to re-run completed findings. Use `--jobs 2` or higher only when you are comfortable with parallel API usage, web-search rate limits, and higher token spend.
+
+The default runner is:
+
+```text
+codex exec --model gpt-5.5 -c 'model_reasoning_effort="xhigh"' --search ...
+```
+
+For non-Codex CLIs, pass `--runner-command`. The prompt is sent on stdin and these placeholders are available: `{finding_id}`, `{prompt_file}`, `{output_file}`, `{log_file}`, `{context}`, `{repo}`, `{helper}`, `{model}`, and `{reasoning_effort}`.
+
 ## Codex Usage
 
 Copy or symlink this folder into your Codex skills directory:

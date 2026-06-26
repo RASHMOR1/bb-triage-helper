@@ -5,4 +5,5 @@ __pycache__/
 .ruff_cache/
 
 triage-helper-output/
+bb-triage-helper-output/
 .claude/
